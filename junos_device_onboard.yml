@@ -1,0 +1,37 @@
+---
+- name: Onboard Juniper Devices to Mist Cloud
+  hosts: juniper_devices
+  gather_facts: no
+  connection: local
+
+  tasks:
+    - name: Ensure NETCONF is enabled on the device
+      juniper.device.netconf:
+        host: "{{ inventory_hostname }}"
+        username: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+        state: present
+
+    - name: Configure device for Mist Cloud
+      juniper.device.config:
+        lines:
+          - "set system login user svc_ansible class super-user"
+          - "set system login user svc_ansible authentication load-key-file /tmp/id_rsa.pub"
+        commit: yes
+
+    - name: Verify connectivity to Mist Cloud
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 2200
+        timeout: 5
+
+    - name: Claim APs in Mist
+      mist.mist_api.claim_ap:
+        api_key: "{{ mist_api_key }}"
+        ap_serial_number: "{{ item }}"
+      loop: "{{ ap_serial_numbers }}"
+
+    - name: Add switch to Mist portal
+      mist.mist_api.add_switch:
+        api_key: "{{ mist_api_key }}"
+        switch_serial_number: "{{ switch_serial_number }}"
