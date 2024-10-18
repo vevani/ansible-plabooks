@@ -1,0 +1,44 @@
+---
+- name: Configure GRE Tunnel to Zscaler on Juniper SD-WAN Router
+  hosts: juniper_routers
+  gather_facts: no
+  connection: ssh
+  vars:
+    gre_tunnel_name: "gre-tunnel-1"
+    source_ip: "{{ ansible_eth0.ipv4.address }}"  # Replace with your source IP variable
+    zscaler_ip: "ZSCALER_PUBLIC_IP"  # Replace with the actual Zscaler public IP
+    tunnel_ip: "TUNNEL_IP"  # Replace with your desired tunnel IP
+
+  tasks:
+    - name: Create GRE Tunnel Interface
+      juniper_junos_interface:
+        name: "{{ gre_tunnel_name }}"
+        description: "GRE Tunnel to Zscaler"
+        unit: 0
+        family_inet:
+          address: "{{ tunnel_ip }}/30"
+        state: present
+
+    - name: Configure GRE Tunnel Source and Destination
+      juniper_junos_config:
+        lines:
+          - "set interfaces {{ gre_tunnel_name }} unit 0 tunnel source {{ source_ip }}"
+          - "set interfaces {{ gre_tunnel_name }} unit 0 tunnel destination {{ zscaler_ip }}"
+          - "set interfaces {{ gre_tunnel_name }} unit 0 tunnel keepalive"
+        commit: yes
+
+    - name: Configure Routing for GRE Tunnel
+      juniper_junos_route:
+        prefix: "0.0.0.0/0"
+        next_hop: "{{ tunnel_ip }}"
+        state: present
+
+    - name: Verify GRE Tunnel Status
+      juniper_junos_command:
+        commands:
+          - "show interfaces terse | match {{ gre_tunnel_name }}"
+          - "show route"
+      register: gre_status
+
+    - debug:
+        var: gre_status.stdout_lines
